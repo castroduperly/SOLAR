@@ -1,99 +1,85 @@
-let base_url = 
-"https://www.youtube.com/embed/9d3qFZdGnwo?autoplay=1&start=153&end=160";
-let base_url1 = 
-"https://www.youtube.com/embed/iwhx2gZ5fBE?&start=142&end=152&autoplay=1";
-var player;
+/* CONNECT_AUTOMATICALLY
+  true: automatically connect to Web3 Provider on page load.
+  false: enable "click to connect" button
+*/
+const CONNECT_AUTOMATICALLY = false;
 
-function setup() {
-  createCanvas(200,200);
-  background(0);
-  //createVideo(base_url);
-  player = select("#yt_video");
-  
-  player.attribute('src', base_url);
-  player.position(0,0);  
-
+if(CONNECT_AUTOMATICALLY) {
+  main();
+} else {
+  connectButton.onclick = main;
 }
 
-function draw() {
+async function main() {
 
-}
+  // INITIALIZAING STEPS (SKIP TO THE BOTTOM TO WRITE YOUR OWN CODE)
 
-function mousePressed () {
-
-  
-	var iframes = document.querySelectorAll('iframe');
-	//for (var i = 0; i < iframes.length; i++) {
-	iframes[0].parentNode.removeChild(iframes[0]);
-	//}//got code here: https://stackoverflow.com/questions/15103552/remove-iframe-with-javascript
-	select("#yt_video2").attribute('src', base_url1);
-	select("#yt_video2").position(0,0);
-	 
-}
-
-
-
-
-
-
-const provider = new ethers.providers.Web3Provider(window.ethereum);
-
-// the person signed into metamask is the 'signer'
-const signer = provider.getSigner();
-console.log(signer);
-const contract = new ethers.Contract(contractAddress, contractABI, provider);
-
-viewStatus();
-viewVotes();
-
-$('#contractAddress').text(contractAddress);
-
-setInterval(function () {
-  viewStatus();
-  viewVotes();
-}, 2000);
-
-
-$('#voteYes').click(function () {
-  voteYes();
-})
-
-$('#voteNo').click(function () {
-  voteNo();
-})
-
-async function viewVotes() {
-  const voteCount = await contract.viewVotes();
-  $('#yesVotes').text(`${voteCount[0]}`);
-  $('#noVotes').text(`${voteCount[1]}`);
-}
-
-
-async function viewStatus() {
-  const artStatus = await contract.viewStatus();
-
-  // console.log(artStatus)
-
-  if (artStatus == true) {
-    $('#status').text('is giving light to a sunflower').css('color', 'black');
-  } else if (artStatus == false) {
-    $('#status').text('is denying light to a sunflower').css('color', 'black');
-  } else {
-    $('#status').text('gray area...more votes are required').css('color', 'gray');
+  // Check website compatibility
+  if(navigator.userAgent.indexOf("Safari") != -1
+  && navigator.userAgent.indexOf("Chrome") == -1) {
+    alert("Please switch to a browser that supports Web3 (Chrome, Firefox, Brave, Edge, or Opera)");
+    return;
   }
 
-  return artStatus;
-}
+  // Check if MetaMask is installed
+  if(!window.ethereum) {
+    alert("No Web3 Provider detected, please install MetaMask (https://metamask.io)");
+    return;
+  }
 
-async function voteYes() {
-  await provider.send("eth_requestAccounts", []);
-  const tokenWithSigner = contract.connect(signer);
-  tokenWithSigner.voteYes();
-  
-}
+  // (REQUIRED) Connect to a Web3 provider (MetaMask in most cases)
+  const provider = new ethers.providers.Web3Provider(window.ethereum, "any");
 
-async function voteNo() {
+  // If the network changes, refresh the page. (e.g. the user switches from mainnet to goerli)
+  provider.on("network", (newNetwork, oldNetwork) => {
+    if (oldNetwork) {
+        window.location.reload();
+    }
+  });
+
+  // (REQUIRED) Connect to signed-in account. If not signed in, MetaMask will prompt you to sign in
   await provider.send("eth_requestAccounts", []);
-  const tokenWithSigner = contract.connect(signer);
-  tokenWithSigner.voteNo();
+
+  // Check if user is connected to Goerli
+  const chainId = await provider.getNetwork();
+  if(chainId.chainId != 5) {
+    alert("Please switch to the Goerli Test Network in MetaMask. The page will refresh automatically after switching.");
+    return;
+  }
+  connectButton.setAttribute("disabled", "true");
+  increaseNumButton.removeAttribute("disabled");
+
+  // (REQUIRED) These are your primary variables for interacting with your smart contract
+  const signer = provider.getSigner();
+  const contract = new ethers.Contract(contractAddress, contractABI, provider);
+  const contractWithSigner = contract.connect(signer);
+
+  //----------------------------------------------------//
+  //-----------ADD YOUR CODE BELOW THIS LINE------------//
+  //----------------------------------------------------//
+
+  displayNumber();
+
+  //////////// EVENT LISTENERS ////////////////
+
+  // Listen for the "NumIncreasedEvent" to emit from the contract
+  contract.on("NumIncreasedEvent", (message, newNumber) => {
+    console.log(message);
+    currentNumberDisplay.textContent = newNumber;
+  });
+
+  increaseNumButton.onclick = increaseNumber;
+
+
+  ////////////// FUNCTIONS ///////////////////
+
+  function increaseNumber() {
+    // Call the 'increaseNum()' function in the contract
+    contractWithSigner.increaseNum();
+  }
+
+  async function displayNumber() {
+    // Call the 'getNum()' function in the contract
+    currentNumberDisplay.textContent = await contract.getNum();
+  }
 }
